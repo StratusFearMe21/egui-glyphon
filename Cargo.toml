@@ -9,3 +9,6 @@ edition = "2021"
 egui = { git = "https://github.com/emilk/egui", version = "0.25.0" }
 egui-wgpu = { git = "https://github.com/emilk/egui", version = "0.25.0" }
 glyphon = { git = "https://github.com/StratusFearMe21/glyphon" }
+
+[dev-dependencies]
+eframe = { git = "https://github.com/emilk/egui", version = "0.25.0" }
