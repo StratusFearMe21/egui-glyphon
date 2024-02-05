@@ -6,9 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-egui = { git = "https://github.com/emilk/egui", version = "0.25.0" }
-egui-wgpu = { git = "https://github.com/emilk/egui", version = "0.25.0" }
+egui = { git = "https://github.com/emilk/egui" }
+egui-wgpu = { git = "https://github.com/emilk/egui" }
 glyphon = { git = "https://github.com/StratusFearMe21/glyphon" }
 
 [dev-dependencies]
-eframe = { git = "https://github.com/emilk/egui", version = "0.25.0" }
+eframe = { git = "https://github.com/emilk/egui" }

@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use egui::mutex::{Mutex, RwLock};
 use egui::{Pos2, Rect, Vec2};
-use egui_wgpu::renderer::ScreenDescriptor;
 use egui_wgpu::wgpu;
+use egui_wgpu::ScreenDescriptor;
 use glyphon::{
     Buffer, Color, ColorMode, FontSystem, PrepareError, RenderError, Resolution, SwashCache,
     TextArea, TextAtlas, TextBounds, TextRenderer,
