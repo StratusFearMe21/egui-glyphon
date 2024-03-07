@@ -1,6 +1,6 @@
 //! This crate is for using [`glyphon`] to render advanced shaped text to the screen in an [`egui`] application
 //! Please see the example for a primer on how to use this crate
-use std::ops::{Deref, DerefMut};
+use std::ops::DerefMut;
 use std::sync::Arc;
 
 use egui::mutex::{Mutex, RwLock};
@@ -15,8 +15,8 @@ use glyphon::{
 pub use glyphon;
 
 /// A text buffer with some accosiated data used to construect a [`glyphon::TextArea`]
-pub struct BufferWithTextArea<T: AsRef<Buffer> + Send + Sync> {
-    pub buffer: Arc<RwLock<T>>,
+pub struct BufferWithTextArea {
+    pub buffer: Arc<RwLock<Buffer>>,
     pub rect: Rect,
     pub scale: f32,
     pub opacity: f32,
@@ -47,9 +47,9 @@ pub fn measure_buffer(buffer: &Buffer) -> Rect {
     )
 }
 
-impl<T: AsRef<Buffer> + Send + Sync + 'static> BufferWithTextArea<T> {
+impl BufferWithTextArea {
     pub fn new(
-        buffer: Arc<RwLock<T>>,
+        buffer: Arc<RwLock<Buffer>>,
         rect: Rect,
         opacity: f32,
         default_color: Color,
@@ -77,10 +77,7 @@ pub struct GlyphonRenderer {
 
 impl GlyphonRenderer {
     /// Insert an instance of itself into the [`egui_wgpu::RenderState`]
-    pub fn insert<'a>(
-        wgpu_render_state: &'a egui_wgpu::RenderState,
-        font_system: Arc<Mutex<FontSystem>>,
-    ) {
+    pub fn insert(wgpu_render_state: &egui_wgpu::RenderState, font_system: Arc<Mutex<FontSystem>>) {
         let device = &wgpu_render_state.device;
         let queue = &wgpu_render_state.queue;
 
@@ -89,7 +86,7 @@ impl GlyphonRenderer {
             device,
             queue,
             wgpu_render_state.target_format,
-            ColorMode::Egui,
+            ColorMode::Web,
         );
         let text_renderer =
             TextRenderer::new(&mut atlas, device, wgpu::MultisampleState::default(), None);
@@ -106,12 +103,12 @@ impl GlyphonRenderer {
             });
     }
 
-    fn prepare<A: AsRef<Buffer>, T: Deref<Target = A>>(
+    fn prepare<'a>(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         screen_resolution: Resolution,
-        text_areas: impl IntoIterator<Item = TextArea<A, T>>,
+        text_areas: impl IntoIterator<Item = TextArea<'a>>,
     ) -> Result<(), PrepareError> {
         self.text_renderer.prepare(
             device,
@@ -132,12 +129,12 @@ impl GlyphonRenderer {
 /// A callback which can be put into an [`egui_wgpu::renderer::Callback`].
 // And wrapped with an [`egui::PaintCallback`]. Only add one callback per individual
 // deffered viewport.
-pub struct GlyphonRendererCallback<T: AsRef<Buffer> + Send + Sync> {
+pub struct GlyphonRendererCallback {
     /// These buffers will be rendered to the screen all at the same time on the same layer.
-    pub buffers: Vec<BufferWithTextArea<T>>,
+    pub buffers: Vec<BufferWithTextArea>,
 }
 
-impl<T: AsRef<Buffer> + Send + Sync> egui_wgpu::CallbackTrait for GlyphonRendererCallback<T> {
+impl egui_wgpu::CallbackTrait for GlyphonRendererCallback {
     fn prepare(
         &self,
         device: &wgpu::Device,
@@ -148,6 +145,25 @@ impl<T: AsRef<Buffer> + Send + Sync> egui_wgpu::CallbackTrait for GlyphonRendere
     ) -> Vec<wgpu::CommandBuffer> {
         let glyphon_renderer: &mut GlyphonRenderer = resources.get_mut().unwrap();
         glyphon_renderer.atlas.trim();
+        let bufrefs: Vec<_> = self.buffers.iter().map(|b| b.buffer.read()).collect();
+        let text_areas: Vec<_> = self
+            .buffers
+            .iter()
+            .enumerate()
+            .map(|(i, b)| TextArea {
+                buffer: bufrefs.get(i).unwrap(),
+                left: b.rect.left(),
+                top: b.rect.top(),
+                scale: b.scale,
+                bounds: TextBounds {
+                    left: b.rect.left() as i32,
+                    top: b.rect.top() as i32,
+                    right: b.rect.right() as i32,
+                    bottom: b.rect.bottom() as i32,
+                },
+                default_color: b.default_color,
+            })
+            .collect();
         glyphon_renderer
             .prepare(
                 device,
@@ -156,20 +172,7 @@ impl<T: AsRef<Buffer> + Send + Sync> egui_wgpu::CallbackTrait for GlyphonRendere
                     width: screen_descriptor.size_in_pixels[0],
                     height: screen_descriptor.size_in_pixels[1],
                 },
-                self.buffers.iter().map(|b| TextArea {
-                    buffer: b.buffer.read(),
-                    left: b.rect.left(),
-                    top: b.rect.top(),
-                    scale: b.scale,
-                    opacity: b.opacity,
-                    bounds: TextBounds {
-                        left: b.rect.left() as i32,
-                        top: b.rect.top() as i32,
-                        right: b.rect.right() as i32,
-                        bottom: b.rect.bottom() as i32,
-                    },
-                    default_color: b.default_color,
-                }),
+                text_areas,
             )
             .unwrap();
         Vec::new()
