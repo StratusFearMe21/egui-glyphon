@@ -8,19 +8,20 @@ use egui::{Pos2, Rect, Vec2};
 use egui_wgpu::wgpu;
 use egui_wgpu::ScreenDescriptor;
 use glyphon::{
-    Buffer, Color, ColorMode, FontSystem, PrepareError, RenderError, Resolution, SwashCache,
-    TextArea, TextAtlas, TextBounds, TextRenderer,
+    Buffer, Color, ColorMode, FontSystem, PrepareError, Resolution, SwashCache, TextArea,
+    TextAtlas, TextBounds, TextRenderer,
 };
 
 pub use glyphon;
 
 /// A text buffer with some accosiated data used to construect a [`glyphon::TextArea`]
-pub struct BufferWithTextArea {
+pub struct BufferWithTextArea<T> {
     pub buffer: Arc<RwLock<Buffer>>,
     pub rect: Rect,
     pub scale: f32,
     pub opacity: f32,
     pub default_color: Color,
+    pub associated_data: T,
 }
 
 /// Use this function to find out the dimensions of a buffer, translate the resulting rect and use it in [`BufferWithTextArea::new`]
@@ -41,19 +42,24 @@ pub fn measure_buffer(buffer: &Buffer) -> Rect {
     Rect::from_min_size(
         Pos2::ZERO,
         Vec2::new(
-            if rtl { max_width } else { width.min(max_width) },
-            (total_lines as f32 * buffer.metrics().line_height).min(max_height),
+            if rtl {
+                max_width.unwrap_or(width)
+            } else {
+                width.min(max_width.unwrap_or(width))
+            },
+            (total_lines as f32 * buffer.metrics().line_height).min(max_height.unwrap_or(f32::MAX)),
         ),
     )
 }
 
-impl BufferWithTextArea {
+impl<T> BufferWithTextArea<T> {
     pub fn new(
         buffer: Arc<RwLock<Buffer>>,
         rect: Rect,
         opacity: f32,
         default_color: Color,
         ctx: &egui::Context,
+        associated_data: T,
     ) -> Self {
         let ppi = ctx.pixels_per_point();
         let rect = rect * ppi;
@@ -63,6 +69,7 @@ impl BufferWithTextArea {
             scale: ppi,
             opacity,
             default_color,
+            associated_data,
         }
     }
 }
@@ -73,11 +80,17 @@ pub struct GlyphonRenderer {
     cache: SwashCache,
     atlas: TextAtlas,
     text_renderer: TextRenderer,
+    viewport: glyphon::Viewport,
 }
 
 impl GlyphonRenderer {
     /// Insert an instance of itself into the [`egui_wgpu::RenderState`]
-    pub fn insert(wgpu_render_state: &egui_wgpu::RenderState, font_system: Arc<Mutex<FontSystem>>) {
+    pub fn insert(
+        wgpu_render_state: &egui_wgpu::RenderState,
+        font_system: Arc<Mutex<FontSystem>>,
+        glyphon_cache: &glyphon::Cache,
+        glyphon_viewport: glyphon::Viewport,
+    ) {
         let device = &wgpu_render_state.device;
         let queue = &wgpu_render_state.queue;
 
@@ -85,6 +98,7 @@ impl GlyphonRenderer {
         let mut atlas = TextAtlas::with_color_mode(
             device,
             queue,
+            glyphon_cache,
             wgpu_render_state.target_format,
             ColorMode::Web,
         );
@@ -100,6 +114,7 @@ impl GlyphonRenderer {
                 cache,
                 atlas,
                 text_renderer,
+                viewport: glyphon_viewport,
             });
     }
 
@@ -110,31 +125,28 @@ impl GlyphonRenderer {
         screen_resolution: Resolution,
         text_areas: impl IntoIterator<Item = TextArea<'a>>,
     ) -> Result<(), PrepareError> {
+        self.viewport.update(queue, screen_resolution);
         self.text_renderer.prepare(
             device,
             queue,
             self.font_system.lock().deref_mut(),
             &mut self.atlas,
-            screen_resolution,
+            &self.viewport,
             text_areas,
             &mut self.cache,
         )
-    }
-
-    fn render<'pass>(&'pass self, pass: &mut wgpu::RenderPass<'pass>) -> Result<(), RenderError> {
-        self.text_renderer.render(&self.atlas, pass)
     }
 }
 
 /// A callback which can be put into an [`egui_wgpu::renderer::Callback`].
 // And wrapped with an [`egui::PaintCallback`]. Only add one callback per individual
 // deffered viewport.
-pub struct GlyphonRendererCallback {
+pub struct GlyphonRendererCallback<T> {
     /// These buffers will be rendered to the screen all at the same time on the same layer.
-    pub buffers: Vec<BufferWithTextArea>,
+    pub buffers: Vec<BufferWithTextArea<T>>,
 }
 
-impl egui_wgpu::CallbackTrait for GlyphonRendererCallback {
+impl<T: Sync + Send> egui_wgpu::CallbackTrait for GlyphonRendererCallback<T> {
     fn prepare(
         &self,
         device: &wgpu::Device,
@@ -162,6 +174,8 @@ impl egui_wgpu::CallbackTrait for GlyphonRendererCallback {
                     bottom: b.rect.bottom() as i32,
                 },
                 default_color: b.default_color,
+                custom_glyphs: &[],
+                opacity: b.opacity,
             })
             .collect();
         glyphon_renderer
@@ -178,11 +192,11 @@ impl egui_wgpu::CallbackTrait for GlyphonRendererCallback {
         Vec::new()
     }
 
-    fn paint<'a>(
+    fn paint(
         &self,
         info: egui::PaintCallbackInfo,
-        render_pass: &mut wgpu::RenderPass<'a>,
-        resources: &'a egui_wgpu::CallbackResources,
+        render_pass: &mut wgpu::RenderPass<'static>,
+        callback_resources: &egui_wgpu::CallbackResources,
     ) {
         render_pass.set_viewport(
             0.0,
@@ -192,7 +206,14 @@ impl egui_wgpu::CallbackTrait for GlyphonRendererCallback {
             0.0,
             1.0,
         );
-        let glyphon_renderer: &GlyphonRenderer = resources.get().unwrap();
-        glyphon_renderer.render(render_pass).unwrap();
+        let glyphon_renderer: &GlyphonRenderer = callback_resources.get().unwrap();
+        glyphon_renderer
+            .text_renderer
+            .render(
+                &glyphon_renderer.atlas,
+                &glyphon_renderer.viewport,
+                render_pass,
+            )
+            .unwrap()
     }
 }
