@@ -9,7 +9,7 @@ use egui_wgpu::wgpu;
 use egui_wgpu::ScreenDescriptor;
 use glyphon::{
     Buffer, Color, ColorMode, FontSystem, PrepareError, RenderError, Resolution, SwashCache,
-    TextArea, TextAtlas, TextBounds, TextRenderer,
+    TextArea, TextAtlas, TextBounds, TextRenderer, Viewport
 };
 
 pub use glyphon;
@@ -36,15 +36,16 @@ pub fn measure_buffer(buffer: &Buffer) -> Rect {
                 (run.line_w.max(width), total_lines + 1)
             });
 
-    let (max_width, max_height) = buffer.size();
+    let height = total_lines as f32 * buffer.metrics().line_height;
 
-    Rect::from_min_size(
-        Pos2::ZERO,
-        Vec2::new(
-            if rtl { max_width } else { width.min(max_width) },
-            (total_lines as f32 * buffer.metrics().line_height).min(max_height),
-        ),
-    )
+    let (max_width, max_height) = buffer.size();
+    let max_width = max_width.unwrap_or(width);
+    let max_height = max_height.unwrap_or(height);
+
+    let width = if rtl { max_width } else { width.min(max_width) };
+    let height = height.min(max_height);
+
+    Rect::from_min_size(Pos2::ZERO, Vec2::new(width, height))
 }
 
 impl BufferWithTextArea {
@@ -72,6 +73,7 @@ pub struct GlyphonRenderer {
     font_system: Arc<Mutex<FontSystem>>,
     cache: SwashCache,
     atlas: TextAtlas,
+    viewport: Viewport,
     text_renderer: TextRenderer,
 }
 
@@ -82,9 +84,12 @@ impl GlyphonRenderer {
         let queue = &wgpu_render_state.queue;
 
         let cache = SwashCache::new();
+        let gcache = glyphon::Cache::new(device);
+        let viewport = Viewport::new(device, &gcache);
         let mut atlas = TextAtlas::with_color_mode(
             device,
             queue,
+            &gcache,
             wgpu_render_state.target_format,
             ColorMode::Web,
         );
@@ -98,6 +103,7 @@ impl GlyphonRenderer {
             .insert(Self {
                 font_system: Arc::clone(&font_system),
                 cache,
+                viewport,
                 atlas,
                 text_renderer,
             });
@@ -110,19 +116,20 @@ impl GlyphonRenderer {
         screen_resolution: Resolution,
         text_areas: impl IntoIterator<Item = TextArea<'a>>,
     ) -> Result<(), PrepareError> {
+        self.viewport.update(queue, screen_resolution);
         self.text_renderer.prepare(
             device,
             queue,
             self.font_system.lock().deref_mut(),
             &mut self.atlas,
-            screen_resolution,
+            &self.viewport,
             text_areas,
             &mut self.cache,
         )
     }
 
-    fn render<'pass>(&'pass self, pass: &mut wgpu::RenderPass<'pass>) -> Result<(), RenderError> {
-        self.text_renderer.render(&self.atlas, pass)
+    fn render(&self, pass: &mut wgpu::RenderPass<'static>) -> Result<(), RenderError> {
+        self.text_renderer.render(&self.atlas, &self.viewport, pass)
     }
 }
 
@@ -151,6 +158,7 @@ impl egui_wgpu::CallbackTrait for GlyphonRendererCallback {
             .iter()
             .enumerate()
             .map(|(i, b)| TextArea {
+                custom_glyphs: &[],
                 buffer: bufrefs.get(i).unwrap(),
                 left: b.rect.left(),
                 top: b.rect.top(),
@@ -181,8 +189,8 @@ impl egui_wgpu::CallbackTrait for GlyphonRendererCallback {
     fn paint<'a>(
         &self,
         info: egui::PaintCallbackInfo,
-        render_pass: &mut wgpu::RenderPass<'a>,
-        resources: &'a egui_wgpu::CallbackResources,
+        render_pass: &mut wgpu::RenderPass<'static>,
+        resources: &egui_wgpu::CallbackResources,
     ) {
         render_pass.set_viewport(
             0.0,
