@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-egui = "0.30.0"
+egui = { version = "0.30.0", default-features = false }
 egui-wgpu = "0.30.0"
 glyphon = "0.7.0"
 
