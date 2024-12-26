@@ -26,7 +26,7 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "My egui App",
         options,
-        Box::new(|cc| Box::new(MyApp::new(cc))),
+        Box::new(|cc| Ok(Box::new(MyApp::new(cc)))),
     )
 }
 
@@ -42,14 +42,15 @@ impl Default for MyApp {
         let mut buffer =
             egui_glyphon::glyphon::Buffer::new(&mut font_system, Metrics::new(30.0, 42.0));
 
-        buffer.set_size(&mut font_system, 16.0, 9.0);
+        buffer.set_size(&mut font_system, Some(16.0), Some(9.0));
         buffer.set_text(&mut font_system, "<== Hello world! ==> 👋\nThis is rendered with 🦅 glyphon 🦁\nThe text below should be partially clipped.\na b c d e f g h i j k l m n o p q r s t u v w x y z fi ffi 🐕‍🦺 fi ffi
         fi تما 🐕‍🦺 ffi تما
         ffi fi 🐕‍🦺 ffi fi
         تما تما 🐕‍🦺 تما
         تما ffi 🐕‍🦺 تما fi تما
         تما تما 🐕‍🦺 تما", Attrs::new().family(Family::SansSerif), Shaping::Advanced);
-        buffer.shape_until_scroll(&mut font_system);
+        let prune = false;
+        buffer.shape_until_scroll(&mut font_system, prune);
         Self {
             font_system: Arc::new(Mutex::new(font_system)),
             buffer: Arc::new(RwLock::new(buffer)),
@@ -75,11 +76,12 @@ impl eframe::App for MyApp {
         let size = Vec2::new(16.0 * self.size, 9.0 * self.size);
 
         {
+            let prune = false;
             let mut font_system = self.font_system.lock();
             let mut buffer = self.buffer.write();
             buffer.set_metrics(&mut font_system, Metrics::new(self.size, self.size));
-            buffer.set_size(&mut font_system, size.x, size.y);
-            buffer.shape_until_scroll(&mut font_system);
+            buffer.set_size(&mut font_system, Some(size.x), Some(size.y));
+            buffer.shape_until_scroll(&mut font_system, prune);
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
