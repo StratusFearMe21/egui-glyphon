@@ -6,10 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-egui = { version = "0.29.1", default-features = false }
-egui-wgpu = "0.29.1"
+egui = { version = "0.31", default-features = false }
+egui-wgpu = "0.31"
 glyphon = { git = "https://git.nations.lol/fnmain/glyphon.git" }
 
 [dev-dependencies]
-eframe = { version = "0.29.1", features = ["wgpu"] }
+eframe = { version = "0.31", features = ["wgpu"] }
 env_logger = "0.11.3"

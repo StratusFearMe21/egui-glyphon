@@ -26,7 +26,7 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "My egui App",
         options,
-        Box::new(|cc| Box::new(MyApp::new(cc))),
+        Box::new(|cc| Ok(Box::new(MyApp::new(cc)))),
     )
 }
 
@@ -42,14 +42,14 @@ impl Default for MyApp {
         let mut buffer =
             egui_glyphon::glyphon::Buffer::new(&mut font_system, Metrics::new(30.0, 42.0));
 
-        buffer.set_size(&mut font_system, 16.0, 9.0);
+        buffer.set_size(&mut font_system, Some(16.0), Some(9.0));
         buffer.set_text(&mut font_system, "<== Hello world! ==> 👋\nThis is rendered with 🦅 glyphon 🦁\nThe text below should be partially clipped.\na b c d e f g h i j k l m n o p q r s t u v w x y z fi ffi 🐕‍🦺 fi ffi
         fi تما 🐕‍🦺 ffi تما
         ffi fi 🐕‍🦺 ffi fi
         تما تما 🐕‍🦺 تما
         تما ffi 🐕‍🦺 تما fi تما
         تما تما 🐕‍🦺 تما", Attrs::new().family(Family::SansSerif), Shaping::Advanced);
-        buffer.shape_until_scroll(&mut font_system);
+        buffer.shape_until_scroll(&mut font_system, true);
         Self {
             font_system: Arc::new(Mutex::new(font_system)),
             buffer: Arc::new(RwLock::new(buffer)),
@@ -63,7 +63,9 @@ impl MyApp {
         let app = Self::default();
 
         if let Some(ref wgpu) = cc.wgpu_render_state {
-            GlyphonRenderer::insert(wgpu, Arc::clone(&app.font_system));
+            let cache = glyphon::Cache::new(&wgpu.device);
+            let viewport = glyphon::Viewport::new(&wgpu.device, &cache);
+            GlyphonRenderer::insert(wgpu, Arc::clone(&app.font_system), &cache, viewport);
         }
 
         app
@@ -78,19 +80,20 @@ impl eframe::App for MyApp {
             let mut font_system = self.font_system.lock();
             let mut buffer = self.buffer.write();
             buffer.set_metrics(&mut font_system, Metrics::new(self.size, self.size));
-            buffer.set_size(&mut font_system, size.x, size.y);
-            buffer.shape_until_scroll(&mut font_system);
+            buffer.set_size(&mut font_system, Some(size.x), Some(size.y));
+            buffer.shape_until_scroll(&mut font_system, false);
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.add(Slider::new(&mut self.size, 0.1..=67.5));
             let rect = Rect::from_min_size(ui.cursor().min, size);
-            let buffers: Vec<BufferWithTextArea> = vec![BufferWithTextArea::new(
+            let buffers: Vec<BufferWithTextArea<()>> = vec![BufferWithTextArea::new(
                 self.buffer.clone(),
                 rect,
                 1.0,
                 egui_glyphon::glyphon::Color::rgb(255, 255, 255),
                 ui.ctx(),
+                (),
             )];
             ui.painter().add(egui_wgpu::Callback::new_paint_callback(
                 ui.max_rect(),
