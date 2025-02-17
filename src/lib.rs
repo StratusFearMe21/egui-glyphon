@@ -20,6 +20,7 @@ pub struct BufferWithTextArea<T> {
     pub rect: Rect,
     pub scale: f32,
     pub opacity: f32,
+    pub invert: f32,
     pub default_color: Color,
     pub associated_data: T,
 }
@@ -57,6 +58,7 @@ impl<T> BufferWithTextArea<T> {
         buffer: Arc<RwLock<Buffer>>,
         rect: Rect,
         opacity: f32,
+        invert: f32,
         default_color: Color,
         ctx: &egui::Context,
         associated_data: T,
@@ -68,6 +70,7 @@ impl<T> BufferWithTextArea<T> {
             rect,
             scale: ppi,
             opacity,
+            invert,
             default_color,
             associated_data,
         }
@@ -176,6 +179,7 @@ impl<T: Sync + Send> egui_wgpu::CallbackTrait for GlyphonRendererCallback<T> {
                 default_color: b.default_color,
                 custom_glyphs: &[],
                 opacity: b.opacity,
+                invert: b.invert,
             })
             .collect();
         glyphon_renderer
