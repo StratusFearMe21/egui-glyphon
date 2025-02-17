@@ -1466,7 +1466,7 @@ dependencies = [
 [[package]]
 name = "glyphon"
 version = "0.8.0"
-source = "git+https://git.nations.lol/fnmain/glyphon.git#675f627c9c7f62e77c4063eac5ae7d2e2d4dc6cc"
+source = "git+https://git.nations.lol/fnmain/glyphon.git#24e4af85ffa3f3d2e47fa854d2a912c1e2813dbf"
 dependencies = [
  "cosmic-text",
  "etagere",
