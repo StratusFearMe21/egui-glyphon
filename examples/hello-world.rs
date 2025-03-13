@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-use std::sync::Arc;
+use std::{ops::DerefMut, sync::Arc};
 
 use eframe::{
     egui::{self, Slider},
@@ -11,6 +11,7 @@ use eframe::{
     },
     CreationContext,
 };
+use egui::Color32;
 use egui_glyphon::{
     glyphon::{Attrs, Family, FontSystem, Metrics, Shaping},
     BufferWithTextArea, GlyphonRenderer, GlyphonRendererCallback,
@@ -63,9 +64,7 @@ impl MyApp {
         let app = Self::default();
 
         if let Some(ref wgpu) = cc.wgpu_render_state {
-            let cache = glyphon::Cache::new(&wgpu.device);
-            let viewport = glyphon::Viewport::new(&wgpu.device, &cache);
-            GlyphonRenderer::insert(wgpu, Arc::clone(&app.font_system), &cache, viewport);
+            GlyphonRenderer::insert(wgpu, Arc::clone(&app.font_system));
         }
 
         app
@@ -74,26 +73,26 @@ impl MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let size = Vec2::new(16.0 * self.size, 9.0 * self.size);
-
-        {
-            let mut font_system = self.font_system.lock();
-            let mut buffer = self.buffer.write();
-            buffer.set_metrics(&mut font_system, Metrics::new(self.size, self.size));
-            buffer.set_size(&mut font_system, Some(size.x), Some(size.y));
-            buffer.shape_until_scroll(&mut font_system, false);
-        }
-
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.add(Slider::new(&mut self.size, 0.1..=67.5));
+            let size = if ui.add(Slider::new(&mut self.size, 0.1..=67.5)).changed() {
+                let size = Vec2::new(16.0 * self.size, 9.0 * self.size);
+                let mut font_system = self.font_system.lock();
+                let mut buffer = self.buffer.write();
+                buffer.set_metrics(&mut font_system, Metrics::new(self.size, self.size));
+                buffer.set_size(&mut font_system, Some(size.x), Some(size.y));
+                buffer.shape_until_scroll(&mut font_system, false);
+                size
+            } else {
+                Vec2::new(16.0 * self.size, 9.0 * self.size)
+            };
             let rect = Rect::from_min_size(ui.cursor().min, size);
-            let buffers: Vec<BufferWithTextArea<()>> = vec![BufferWithTextArea::new(
+            let buffers: Vec<BufferWithTextArea> = vec![BufferWithTextArea::new(
                 self.buffer.clone(),
+                self.font_system.lock().deref_mut(),
                 rect,
                 1.0,
-                egui_glyphon::glyphon::Color::rgb(255, 255, 255),
+                Color32::WHITE,
                 ui.ctx(),
-                (),
             )];
             ui.painter().add(egui_wgpu::Callback::new_paint_callback(
                 ui.max_rect(),

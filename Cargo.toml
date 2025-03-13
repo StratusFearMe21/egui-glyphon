@@ -6,10 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-egui = { version = "0.31", default-features = false }
-egui-wgpu = "0.31"
-glyphon = { git = "https://git.nations.lol/fnmain/glyphon.git" }
+cosmic-text = "0.12.1"
+egui = { git = "https://github.com/StratusFearMe21/egui.git", default-features = false }
+egui-wgpu = { git = "https://github.com/StratusFearMe21/egui.git", optional = true }
+glyphon = { git = "https://github.com/StratusFearMe21/glyphon", branch = "grezi", optional = true }
 
 [dev-dependencies]
-eframe = { version = "0.31", features = ["wgpu"] }
+eframe = { git = "https://github.com/StratusFearMe21/egui.git", features = ["wgpu"] }
 env_logger = "0.11.3"
+
+[features]
+default = ["glyphon"]
+glyphon = ["dep:glyphon", "dep:egui-wgpu"]
