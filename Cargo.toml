@@ -7,12 +7,12 @@ edition = "2021"
 
 [dependencies]
 cosmic-text = "0.14"
-egui = { version = "0.32.1", default-features = false }
-egui-wgpu = { version = "0.32.1", optional = true }
+egui = { version = "0.33", default-features = false }
+egui-wgpu = { version = "0.33", optional = true }
 glyphon = { git = "https://github.com/StratusFearMe21/glyphon", branch = "grezi", optional = true }
 
 [dev-dependencies]
-eframe = { version = "0.32.1", features = ["wgpu"] }
+eframe = { version = "0.33", features = ["wgpu"] }
 env_logger = "0.11.3"
 
 [features]

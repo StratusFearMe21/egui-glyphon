@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-use std::{ops::DerefMut, sync::Arc};
+use std::sync::Arc;
 
 use eframe::{
     egui::{self, Slider},
@@ -49,7 +49,7 @@ impl Default for MyApp {
         ffi fi 🐕‍🦺 ffi fi
         تما تما 🐕‍🦺 تما
         تما ffi 🐕‍🦺 تما fi تما
-        تما تما 🐕‍🦺 تما", Attrs::new().family(Family::SansSerif), Shaping::Advanced);
+        تما تما 🐕‍🦺 تما", &Attrs::new().family(Family::SansSerif), Shaping::Advanced);
         buffer.shape_until_scroll(&mut font_system, true);
         Self {
             font_system: Arc::new(Mutex::new(font_system)),
@@ -88,7 +88,6 @@ impl eframe::App for MyApp {
             let rect = Rect::from_min_size(ui.cursor().min, size);
             let buffers: Vec<BufferWithTextArea> = vec![BufferWithTextArea::new(
                 self.buffer.clone(),
-                self.font_system.lock().deref_mut(),
                 rect,
                 1.0,
                 Color32::WHITE,
